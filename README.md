@@ -1,6 +1,6 @@
-# Spirit11
+# Spirit11 
 
-Group DevTrix
+Team DevTrix
 
 
 # Installation
