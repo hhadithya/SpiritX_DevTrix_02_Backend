@@ -32,7 +32,7 @@ export const getTeam = async (req: Request, res: Response): Promise<any> => {
 };
 
 export const createTeam = async (req: Request, res: Response): Promise<any> => {
-    const { teamName, players , userId } = req.body;
+    const { teamName, playerIds , userId } = req.body;
 
     console.log(`tring to create team ${teamName} for user ${userId}`);
 
@@ -44,8 +44,13 @@ export const createTeam = async (req: Request, res: Response): Promise<any> => {
         return res.status(400).json({ error: 'Invalid teamName value' });
     }
 
-    if (!Array.isArray(players) || players.length < 10 || players.length > 11 || !players.every(player => typeof player === 'string')) {
-        return res.status(400).json({ error: 'Invalid players value' });
+    if (!Array.isArray(playerIds)  || playerIds.length != 11 || !playerIds.every(player => typeof player === 'string')) {
+        return res.status(400).json({ error: 'Invalid playerIds value' });
+    }
+    // Remove duplicates from playerIds
+    const uniquePlayerIds = Array.from(new Set(playerIds));
+    if (uniquePlayerIds.length !== 11) {
+        return res.status(400).json({ error: 'playerIds must contain 11 unique players' });
     }
 
     console.log(`team ${teamName} creation basic validation completed`);
@@ -57,19 +62,42 @@ export const createTeam = async (req: Request, res: Response): Promise<any> => {
     if (!userDoc.exists) {
         return res.status(404).json({ error: 'user not found' });
     }
-
+    
     const userTeams = userDoc.data()?.teams as string[] || [];
     const userTeamsCreated = userDoc.data()?.teamsCreated as number || 0;
-
+    const userBudget = userDoc.data()?.budgetRemaining as number || 0;
+    
     console.log(`user teams ${userTeams} before adding new team`);
     if(userTeams.find((team: string) => team === teamName)){
         return res.status(400).json({ error: 'Team already created' });
     }
+    
+
+    // calculate total cost of players
+    const playerCosts:number[] = await Promise.all(
+        uniquePlayerIds.map(async (player: string) => {
+            const playerRef = firestore.collection('players').doc(player);
+            const playerDoc = await playerRef.get();
+    
+            if (!playerDoc.exists || !playerDoc.data()?.activeStatus) {
+                res.status(404).json({ error: `Player ${player} not found` });
+                throw new Error(`Player for playerId ${player} not found`);
+            }
+    
+            return playerDoc.data()?.basePrice as number || 0;
+        })
+    );
+    const totalCost = playerCosts.reduce((acc, cost) => acc + Number(cost), 0);
+    console.log(`total cost of players ${totalCost} user budget ${userBudget}`);
+    if (totalCost > userBudget) {
+        return res.status(400).json({ error: 'Insufficient budget' });
+    }
+
 
     const timestamp = new Date();
-
+    
     try {
-        const newTeam = { teamName, players, createdAt: timestamp};
+        const newTeam = { teamName, players:uniquePlayerIds, createdAt: timestamp};
         const teamRef = await firestore.collection('userTeams');
         const snapshot = await teamRef.where('teamName', '==', teamName).get();
         if (!snapshot.empty) {
@@ -77,7 +105,7 @@ export const createTeam = async (req: Request, res: Response): Promise<any> => {
         }
         const newTeamDocName = userId +"-"+ userTeamsCreated.toString();
         await teamRef.doc(newTeamDocName).set(newTeam);
-        await userRef.update({ teams: [...userTeams, newTeamDocName], teamsCreated: FieldValue.increment(1) });
+        await userRef.update({ teams: [...userTeams, newTeamDocName], teamsCreated: FieldValue.increment(1) , budgetRemaining: FieldValue.increment(-totalCost)});
         res.status(201).json({ id: teamRef.id, ...newTeam });
     } catch (error) {
         console.error('Error adding team:', error);
@@ -85,3 +113,24 @@ export const createTeam = async (req: Request, res: Response): Promise<any> => {
     }
 };
 
+
+
+export const deleteGame = async (req: Request, res: Response): Promise<any> => {
+    try {
+        const playerRef = firestore.collection('players').doc(req.params.id);
+        const playerDoc = await playerRef.get();
+
+        if (!playerDoc.exists || !playerDoc.data()?.activeStatus) {
+            return res.status(404).json({ error: 'Player not found' });
+        }
+
+        // await playerRef.delete();  // THIS IS PERMANENT DELETE
+
+        // instead, we update the activeStatus field to false
+        await playerRef.update({ activeStatus: false });
+        res.json({ message: 'Player deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting player:', error);
+        res.status(500).json({ error: 'Failed to delete player' });
+    }
+}
