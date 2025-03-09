@@ -7,6 +7,7 @@ import playerrouter from './routes/playerRoutes';
 import adminRouter from './routes/adminRouter';
 import teamRouter from './routes/teamsRouter';
 import gameRouter from './routes/gameRouter';
+import tournamentRoutes from "./routes/tournament";
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/admin', adminRouter);
 app.use('/team', teamRouter);
 app.use('/game', gameRouter);
 app.use('/players', playerrouter);
+app.use("/api/tournament-stats", tournamentRoutes);
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
