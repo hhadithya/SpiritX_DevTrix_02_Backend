@@ -112,25 +112,3 @@ export const createTeam = async (req: Request, res: Response): Promise<any> => {
         res.status(500).json({ error: 'Failed to add Team' });
     }
 };
-
-
-
-export const deleteGame = async (req: Request, res: Response): Promise<any> => {
-    try {
-        const playerRef = firestore.collection('players').doc(req.params.id);
-        const playerDoc = await playerRef.get();
-
-        if (!playerDoc.exists || !playerDoc.data()?.activeStatus) {
-            return res.status(404).json({ error: 'Player not found' });
-        }
-
-        // await playerRef.delete();  // THIS IS PERMANENT DELETE
-
-        // instead, we update the activeStatus field to false
-        await playerRef.update({ activeStatus: false });
-        res.json({ message: 'Player deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting player:', error);
-        res.status(500).json({ error: 'Failed to delete player' });
-    }
-}

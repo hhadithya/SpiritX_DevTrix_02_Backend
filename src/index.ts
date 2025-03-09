@@ -4,6 +4,7 @@ import bodyParser from 'body-parser';
 
 import  adminRouter from './routes/adminRouter';
 import teamRouter from './routes/teamsRouter';
+import gameRouter from './routes/gameRouter';
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.get('/', (req: Request, res: Response) => {
 
 app.use('/admin', adminRouter);
 app.use('/team', teamRouter);
+app.use('/game', gameRouter);
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
