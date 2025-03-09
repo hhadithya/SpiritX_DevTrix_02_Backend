@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { firestore } from './firebase/firebase';
 import bodyParser from 'body-parser';
+import playerrouter from './routes/playerRoutes';
 
 import  adminRouter from './routes/adminRouter';
 import teamRouter from './routes/teamsRouter';
@@ -21,6 +22,7 @@ app.get('/', (req: Request, res: Response) => {
 app.use('/admin', adminRouter);
 app.use('/team', teamRouter);
 app.use('/game', gameRouter);
+app.use('/players', playerrouter);
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
