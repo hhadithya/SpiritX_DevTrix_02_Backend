@@ -1,5 +1,5 @@
 import express from 'express';
-import { getPlayers, getPlayerById, addPlayer, updatePlayer, deletePlayer } from '../controllers/playerController';
+import { getPlayers, getPlayerById, createPlayer, updatePlayer, deletePlayer } from '../controllers/playerController';
 
 const adminRouter = express.Router();
 
@@ -9,7 +9,7 @@ const adminRouter = express.Router();
 
 adminRouter.get('/players', getPlayers);
 adminRouter.get('/players/:id', getPlayerById);
-adminRouter.post('/players', addPlayer);
+adminRouter.post('/player', createPlayer);
 adminRouter.put('/players/:id', updatePlayer);
 adminRouter.delete('/players/:id', deletePlayer);
 

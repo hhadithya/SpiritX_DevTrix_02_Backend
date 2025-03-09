@@ -1,5 +1,5 @@
 import express from 'express';
-import {createPlayers,createPlayer} from '../database/playersupdate';
+import {createPlayers,createPlayer} from '../controllers/playerController';
 
 const playerrouter = express.Router();
 
