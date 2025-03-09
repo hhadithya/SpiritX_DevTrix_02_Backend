@@ -11,11 +11,10 @@ import axios from 'axios';
 // Configure your Flask backend URL
 const FLASK_API_URL = process.env.FLASK_API_URL || 'http://localhost:5000/chatbot/api/update-player-data';
 
-/**
- * Type definitions for player data
- */
+
 interface PlayerData {
   name: string;
+  university?: string; 
   category?: string;
   activeStatus?: boolean;
 }
@@ -71,6 +70,7 @@ const getAllPlayersForRag = async (): Promise<any[]> => {
       return {
         playerId,
         name: playerData.name,
+        university: playerData.university, 
         basePrice: playerData.basePrice,
         playerPoints: playerData.stats?.playerPoints.toFixed(2),
         category: playerData.category,
@@ -85,10 +85,7 @@ const getAllPlayersForRag = async (): Promise<any[]> => {
   }
 };
 
-/**
- * Handle update-player-data endpoint for RAG updates
- * This is a new endpoint specifically for the Flask integration
- */
+
 export const handleRagPlayerUpdate = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { players } = req.body;
@@ -183,11 +180,6 @@ export const getPlayers = async (req: Request, res: Response): Promise<any> => {
   }
 };
 
-/**
- * Create multiple players with calculated stats and tournament subcollections
- * Also updates the RAG system with ALL players
- * This is updated to handle the new request format
- */
 export const createPlayers = async (req: Request, res: Response): Promise<any> => {
   try {
     const { players } = req.body;
@@ -199,6 +191,7 @@ export const createPlayers = async (req: Request, res: Response): Promise<any> =
     const results: Array<{
       playerId: string;
       name: string;
+      university: string;
       basePrice: string;
       category: string;
       playerPoints: string;
@@ -231,12 +224,13 @@ export const createPlayers = async (req: Request, res: Response): Promise<any> =
       // Create player document ref
       const playerDocRef = firestore.collection('players').doc(nextPlayerId);
       
-      // Add player to batch with calculated stats
+      // Add player to batch with calculated stats and university
       batch.set(playerDocRef, {
         activeStatus: playerData.activeStatus || true,
         basePrice: basePrice,
         category: playerData.category || "",
         name: playerData.name,
+        university: playerData.university || "", // Added university field
         stats: completeStats
       });
       
@@ -244,6 +238,7 @@ export const createPlayers = async (req: Request, res: Response): Promise<any> =
       results.push({
         playerId: nextPlayerId,
         name: playerData.name,
+        university: playerData.university || "", // Added university field
         basePrice: basePrice,
         category: playerData.category || "",
         playerPoints: completeStats.playerPoints.toFixed(2),
@@ -329,10 +324,7 @@ export const createPlayers = async (req: Request, res: Response): Promise<any> =
   }
 };
 
-/**
- * Create a single player with calculated stats and tournament subcollection
- * Modified to be more flexible with the data format
- */
+
 export const createPlayer = async (req: Request, res: Response): Promise<any> => {
   try {
     // Handle either format: direct fields or nested structure
@@ -347,6 +339,7 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
       // Old structure with direct fields
       playerData = {
         name: data.name,
+        university: data.university, 
         category: data.category,
         activeStatus: data.activeStatus
       };
@@ -372,13 +365,14 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
     // Generate player document ID using the counter approach
     const nextPlayerId = await generateNextId('players');
     
-    // Create player document with fields and calculated stats
+    // Create player document with fields and calculated stats including university
     const playerDocRef = firestore.collection('players').doc(nextPlayerId);
     await playerDocRef.set({
       activeStatus: playerData.activeStatus || true,
       basePrice: basePrice,
       category: playerData.category || "",
       name: playerData.name,
+      university: playerData.university || "", 
       stats: completeStats
     });
     
@@ -412,6 +406,7 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
       return res.status(201).json({ 
         success: true, 
         playerId: nextPlayerId,
+        university: playerData.university,
         basePrice: basePrice,
         playerPoints: completeStats.playerPoints.toFixed(2),
         calculatedValue: `₹${parseInt(basePrice).toLocaleString('en-IN')}`,
@@ -429,6 +424,7 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
       return res.status(201).json({ 
         success: true, 
         playerId: nextPlayerId,
+        university: playerData.university, 
         basePrice: basePrice,
         playerPoints: completeStats.playerPoints.toFixed(2),
         calculatedValue: `₹${parseInt(basePrice).toLocaleString('en-IN')}`,
@@ -450,10 +446,7 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
   }
 };
 
-/**
- * Update an existing player
- * Modified to be more flexible with the data format
- */
+
 export const updatePlayer = async (req: Request, res: Response): Promise<any> => {
   try {
     const { playerId } = req.params;
@@ -470,6 +463,7 @@ export const updatePlayer = async (req: Request, res: Response): Promise<any> =>
       // Old structure with direct fields
       playerData = {
         name: data.name,
+        university: data.university, // Added university field
         category: data.category,
         activeStatus: data.activeStatus
       };
@@ -504,12 +498,14 @@ export const updatePlayer = async (req: Request, res: Response): Promise<any> =>
     // Prepare update data, preserving existing stats if not recalculating
     const updateData: {
       name: string;
+      university: string; // Added university field
       category: string;
       activeStatus: boolean;
       stats?: PlayerStats;
       basePrice?: string;
     } = {
       name: playerData.name || existingPlayer?.name,
+      university: playerData.university !== undefined ? playerData.university : existingPlayer?.university || "", // Added university field
       category: playerData.category !== undefined ? playerData.category : existingPlayer?.category,
       activeStatus: playerData.activeStatus !== undefined ? playerData.activeStatus : existingPlayer?.activeStatus
     };
@@ -660,7 +656,8 @@ export const deletePlayer = async (req: Request, res: Response): Promise<any> =>
         players: allPlayers,
         deletedPlayer: {
           playerId: playerId,
-          name: playerData?.name
+          name: playerData?.name,
+          university: playerData?.university 
         }
       };
       
