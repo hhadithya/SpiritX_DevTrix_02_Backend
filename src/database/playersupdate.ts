@@ -1,9 +1,14 @@
 import { Request, Response } from 'express';
 import { firestore } from '../firebase/firebase';
 import { generateNextId } from '../utils/idGenerator';
+import { 
+  createPlayerStatsFromTournamentData, 
+  getCompletePlayerStats, 
+  calculateBasePrice 
+} from '../services/pointCalculatorService';
 
 /**
- * Create multiple players with tournament subcollections
+ * Create multiple players with calculated stats and tournament subcollections
  */
 export const createPlayers = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -25,24 +30,33 @@ export const createPlayers = async (req: Request, res: Response): Promise<any> =
         continue; 
       }
       
+      // Calculate player stats using the service
+      const playerStats = createPlayerStatsFromTournamentData(tournamentData || {});
+      const completeStats = getCompletePlayerStats(playerStats);
+      const basePrice = calculateBasePrice(completeStats.playerPoints);
+      
       // Generate player document ID
       const nextPlayerId = await generateNextId('players');
       
       // Create player document ref
       const playerDocRef = firestore.collection('players').doc(nextPlayerId);
       
-      // Add player to batch
+      // Add player to batch with calculated stats
       batch.set(playerDocRef, {
         activeStatus: playerData.activeStatus || true,
-        basePrice: playerData.basePrice || "0",
+        basePrice: basePrice,
         category: playerData.category || "",
-        name: playerData.name
+        name: playerData.name,
+        stats: completeStats
       });
       
       // Track successful creations
       results.push({
         playerId: nextPlayerId,
         name: playerData.name,
+        basePrice: basePrice,
+        playerPoints: completeStats.playerPoints.toFixed(2),
+        calculatedValue: `₹${parseInt(basePrice).toLocaleString('en-IN')}`,
         success: true
       });
       
@@ -93,7 +107,7 @@ export const createPlayers = async (req: Request, res: Response): Promise<any> =
 };
 
 /**
- *  single player creation function
+ * Create a single player with calculated stats and tournament subcollection
  */
 export const createPlayer = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -103,16 +117,22 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
       return res.status(400).json({ error: 'Player data is required with at least a name field' });
     }
     
+    // Calculate player stats using the service
+    const playerStats = createPlayerStatsFromTournamentData(tournamentData || {});
+    const completeStats = getCompletePlayerStats(playerStats);
+    const basePrice = calculateBasePrice(completeStats.playerPoints);
+    
     // Generate player document ID using the counter approach
     const nextPlayerId = await generateNextId('players');
     
-    // Create player document with fields
+    // Create player document with fields and calculated stats
     const playerDocRef = firestore.collection('players').doc(nextPlayerId);
     await playerDocRef.set({
       activeStatus: playerData.activeStatus || true,
-      basePrice: playerData.basePrice || "0",
+      basePrice: basePrice,
       category: playerData.category || "",
-      name: playerData.name
+      name: playerData.name,
+      stats: completeStats
     });
     
     // If tournament data is provided, create a tournament subcollection
@@ -134,6 +154,9 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
     return res.status(201).json({ 
       success: true, 
       playerId: nextPlayerId,
+      basePrice: basePrice,
+      playerPoints: completeStats.playerPoints.toFixed(2),
+      calculatedValue: `₹${parseInt(basePrice).toLocaleString('en-IN')}`,
       message: 'Player and tournament data added successfully' 
     });
     
