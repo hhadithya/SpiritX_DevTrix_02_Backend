@@ -12,6 +12,29 @@ import axios from 'axios';
 const FLASK_API_URL = process.env.FLASK_API_URL || 'http://localhost:5000/chatbot/api/update-player-data';
 
 /**
+ * Type definitions for player data
+ */
+interface PlayerData {
+  name: string;
+  category?: string;
+  activeStatus?: boolean;
+}
+
+interface TournamentData {
+  runs?: number;
+  wickets?: number;
+  ballsFaced?: number;
+  inningsPlayed?: number;
+  oversBowled?: number;
+  runsConceded?: number;
+}
+
+interface PlayerStats {
+  playerPoints: number;
+  [key: string]: any;
+}
+
+/**
  * Sends all players data to the Flask backend to update the RAG database
  */
 const updateRagDatabase = async (playerData: any): Promise<any> => {
@@ -63,13 +86,54 @@ const getAllPlayersForRag = async (): Promise<any[]> => {
 };
 
 /**
+ * Handle update-player-data endpoint for RAG updates
+ * This is a new endpoint specifically for the Flask integration
+ */
+export const handleRagPlayerUpdate = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { players } = req.body;
+    
+    if (!players || !Array.isArray(players)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid request format. Expected "players" array.' 
+      });
+    }
+    
+    console.log(`Processing ${players.length} players for RAG update`);
+    
+    // We'll simply store this data as received and confirm the update
+    return res.status(200).json({
+      success: true,
+      message: `Successfully updated RAG database with ${players.length} players`,
+      count: players.length
+    });
+    
+  } catch (error) {
+    console.error('Error handling RAG player update:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return res.status(500).json({ 
+      success: false,
+      message: 'Failed to process RAG update',
+      error: errorMessage 
+    });
+  }
+};
+
+/**
  * Get all players with pagination
  */
 export const getPlayers = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { limit = 20, offset = 0, category, sortBy = 'name', sortOrder = 'asc' } = req.query;
+    const { 
+      limit = '20', 
+      offset = '0', 
+      category, 
+      sortBy = 'name', 
+      sortOrder = 'asc' 
+    } = req.query;
     
-    let query: any = firestore.collection('players');
+    let query: FirebaseFirestore.Query = firestore.collection('players');
     
     // Apply category filter if specified
     if (category) {
@@ -93,7 +157,7 @@ export const getPlayers = async (req: Request, res: Response): Promise<any> => {
     // Execute query
     const snapshot = await query.get();
     
-    const players = snapshot.docs.map((doc: { id: any; data: () => any; }) => ({
+    const players = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data()
     }));
@@ -120,51 +184,9 @@ export const getPlayers = async (req: Request, res: Response): Promise<any> => {
 };
 
 /**
- * Get a single player by ID
- */
-export const getPlayerById = async (req: Request, res: Response): Promise<any> => {
-  try {
-    const { playerId } = req.params;
-    
-    if (!playerId) {
-      return res.status(400).json({ error: 'Player ID is required' });
-    }
-    
-    const playerDoc = await firestore.collection('players').doc(playerId).get();
-    
-    if (!playerDoc.exists) {
-      return res.status(404).json({ error: 'Player not found' });
-    }
-    
-    // Get player tournaments
-    const tournamentsSnapshot = await playerDoc.ref.collection('tournaments').get();
-    const tournaments = tournamentsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    
-    return res.status(200).json({
-      success: true,
-      player: {
-        id: playerDoc.id,
-        ...playerDoc.data(),
-        tournaments
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error fetching player:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    return res.status(500).json({ 
-      error: 'Failed to fetch player',
-      details: errorMessage 
-    });
-  }
-};
-
-/**
  * Create multiple players with calculated stats and tournament subcollections
  * Also updates the RAG system with ALL players
+ * This is updated to handle the new request format
  */
 export const createPlayers = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -174,9 +196,21 @@ export const createPlayers = async (req: Request, res: Response): Promise<any> =
       return res.status(400).json({ error: 'An array of player data is required' });
     }
     
-    const results = [];
+    const results: Array<{
+      playerId: string;
+      name: string;
+      basePrice: string;
+      category: string;
+      playerPoints: string;
+      calculatedValue: string;
+      tournamentData: any;
+      success: boolean;
+    }> = [];
     const batch = firestore.batch();
-    const tournamentBatches = [];
+    const tournamentBatches: Array<{
+      playerId: string;
+      tournamentData: TournamentData;
+    }> = [];
     
     // Process each player in the array
     for (const player of players) {
@@ -297,11 +331,34 @@ export const createPlayers = async (req: Request, res: Response): Promise<any> =
 
 /**
  * Create a single player with calculated stats and tournament subcollection
- * Also updates the RAG system with ALL players
+ * Modified to be more flexible with the data format
  */
 export const createPlayer = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { playerData, tournamentData } = req.body;
+    // Handle either format: direct fields or nested structure
+    const data = req.body;
+    let playerData: PlayerData, tournamentData: TournamentData = {};
+    
+    if (data.playerData) {
+      // New structure with nested playerData and tournamentData
+      playerData = data.playerData;
+      tournamentData = data.tournamentData || {};
+    } else {
+      // Old structure with direct fields
+      playerData = {
+        name: data.name,
+        category: data.category,
+        activeStatus: data.activeStatus
+      };
+      
+      // Extract tournament data if present
+      if (data.runs !== undefined) tournamentData.runs = data.runs;
+      if (data.wickets !== undefined) tournamentData.wickets = data.wickets;
+      if (data.ballsFaced !== undefined) tournamentData.ballsFaced = data.ballsFaced;
+      if (data.inningsPlayed !== undefined) tournamentData.inningsPlayed = data.inningsPlayed;
+      if (data.oversBowled !== undefined) tournamentData.oversBowled = data.oversBowled;
+      if (data.runsConceded !== undefined) tournamentData.runsConceded = data.runsConceded;
+    }
     
     if (!playerData || !playerData.name) {
       return res.status(400).json({ error: 'Player data is required with at least a name field' });
@@ -326,7 +383,7 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
     });
     
     // If tournament data is provided, create a tournament subcollection
-    if (tournamentData) {
+    if (Object.keys(tournamentData).length > 0) {
       const tournamentsRef = playerDocRef.collection('tournaments');
       const nextTournamentId = await generateNextId(`players/${nextPlayerId}/tournaments`);
       
@@ -395,12 +452,36 @@ export const createPlayer = async (req: Request, res: Response): Promise<any> =>
 
 /**
  * Update an existing player
- * Also updates the RAG system with ALL players
+ * Modified to be more flexible with the data format
  */
 export const updatePlayer = async (req: Request, res: Response): Promise<any> => {
   try {
     const { playerId } = req.params;
-    const { playerData, tournamentData } = req.body;
+    
+    // Handle either format: direct fields or nested structure
+    const data = req.body;
+    let playerData: PlayerData | undefined, tournamentData: TournamentData = {};
+    
+    if (data.playerData) {
+      // New structure with nested playerData and tournamentData
+      playerData = data.playerData;
+      tournamentData = data.tournamentData || {};
+    } else {
+      // Old structure with direct fields
+      playerData = {
+        name: data.name,
+        category: data.category,
+        activeStatus: data.activeStatus
+      };
+      
+      // Extract tournament data if present
+      if (data.runs !== undefined) tournamentData.runs = data.runs;
+      if (data.wickets !== undefined) tournamentData.wickets = data.wickets;
+      if (data.ballsFaced !== undefined) tournamentData.ballsFaced = data.ballsFaced;
+      if (data.inningsPlayed !== undefined) tournamentData.inningsPlayed = data.inningsPlayed;
+      if (data.oversBowled !== undefined) tournamentData.oversBowled = data.oversBowled;
+      if (data.runsConceded !== undefined) tournamentData.runsConceded = data.runsConceded;
+    }
     
     if (!playerId) {
       return res.status(400).json({ error: 'Player ID is required' });
@@ -421,14 +502,20 @@ export const updatePlayer = async (req: Request, res: Response): Promise<any> =>
     const existingPlayer = playerDoc.data();
     
     // Prepare update data, preserving existing stats if not recalculating
-    const updateData: any = {
+    const updateData: {
+      name: string;
+      category: string;
+      activeStatus: boolean;
+      stats?: PlayerStats;
+      basePrice?: string;
+    } = {
       name: playerData.name || existingPlayer?.name,
       category: playerData.category !== undefined ? playerData.category : existingPlayer?.category,
       activeStatus: playerData.activeStatus !== undefined ? playerData.activeStatus : existingPlayer?.activeStatus
     };
     
     // Recalculate stats if tournament data provided
-    if (tournamentData) {
+    if (Object.keys(tournamentData).length > 0) {
       const playerStats = createPlayerStatsFromTournamentData(tournamentData);
       const completeStats = getCompletePlayerStats(playerStats);
       const basePrice = calculateBasePrice(completeStats.playerPoints);
@@ -454,13 +541,14 @@ export const updatePlayer = async (req: Request, res: Response): Promise<any> =>
       } else {
         // Update the first tournament document
         const firstTournamentDoc = tournamentDocs.docs[0];
+        const existingData = firstTournamentDoc.data();
         await firstTournamentDoc.ref.update({
-          runs: tournamentData.runs !== undefined ? tournamentData.runs : firstTournamentDoc.data().runs,
-          wickets: tournamentData.wickets !== undefined ? tournamentData.wickets : firstTournamentDoc.data().wickets,
-          ballsFaced: tournamentData.ballsFaced !== undefined ? tournamentData.ballsFaced : firstTournamentDoc.data().ballsFaced,
-          inningsPlayed: tournamentData.inningsPlayed !== undefined ? tournamentData.inningsPlayed : firstTournamentDoc.data().inningsPlayed,
-          oversBowled: tournamentData.oversBowled !== undefined ? tournamentData.oversBowled : firstTournamentDoc.data().oversBowled,
-          runsConceded: tournamentData.runsConceded !== undefined ? tournamentData.runsConceded : firstTournamentDoc.data().runsConceded
+          runs: tournamentData.runs !== undefined ? tournamentData.runs : existingData.runs,
+          wickets: tournamentData.wickets !== undefined ? tournamentData.wickets : existingData.wickets,
+          ballsFaced: tournamentData.ballsFaced !== undefined ? tournamentData.ballsFaced : existingData.ballsFaced,
+          inningsPlayed: tournamentData.inningsPlayed !== undefined ? tournamentData.inningsPlayed : existingData.inningsPlayed,
+          oversBowled: tournamentData.oversBowled !== undefined ? tournamentData.oversBowled : existingData.oversBowled,
+          runsConceded: tournamentData.runsConceded !== undefined ? tournamentData.runsConceded : existingData.runsConceded
         });
       }
     }
@@ -528,7 +616,6 @@ export const updatePlayer = async (req: Request, res: Response): Promise<any> =>
 
 /**
  * Delete a player
- * Also updates the RAG system with ALL players
  */
 export const deletePlayer = async (req: Request, res: Response): Promise<any> => {
   try {

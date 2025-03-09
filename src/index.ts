@@ -1,18 +1,22 @@
 import express, { Request, Response } from 'express';
 import { firestore } from './firebase/firebase';
 import bodyParser from 'body-parser';
+import cors from 'cors';
 import playerrouter from './routes/playerRoutes';
 
-import  adminRouter from './routes/adminRouter';
+import adminRouter from './routes/adminRouter';
 import teamRouter from './routes/teamsRouter';
 import gameRouter from './routes/gameRouter';
 
 const app = express();
 
+// Add CORS middleware
+app.use(cors());
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3005;
 const db = firestore;
 
 app.get('/', (req: Request, res: Response) => {

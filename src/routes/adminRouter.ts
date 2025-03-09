@@ -1,5 +1,5 @@
 import express from 'express';
-import { getPlayers, getPlayerById, createPlayer, updatePlayer, deletePlayer } from '../controllers/playerController';
+import { getPlayers, createPlayer, updatePlayer, deletePlayer } from '../controllers/playerController';
 
 const adminRouter = express.Router();
 
@@ -8,7 +8,6 @@ const adminRouter = express.Router();
 // adminRouter.use(isAdmin);
 
 adminRouter.get('/players', getPlayers);
-adminRouter.get('/players/:id', getPlayerById);
 adminRouter.post('/player', createPlayer);
 adminRouter.put('/players/:id', updatePlayer);
 adminRouter.delete('/players/:id', deletePlayer);
