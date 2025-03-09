@@ -4,6 +4,8 @@ import bodyParser from 'body-parser';
 import playerrouter from './routes/playerRoutes';
 
 import  adminRouter from './routes/adminRouter';
+import teamRouter from './routes/teamsRouter';
+import gameRouter from './routes/gameRouter';
 
 const app = express();
 
@@ -18,6 +20,8 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 app.use('/admin', adminRouter);
+app.use('/team', teamRouter);
+app.use('/game', gameRouter);
 app.use('/players', playerrouter);
 
 app.listen(port, () => {
