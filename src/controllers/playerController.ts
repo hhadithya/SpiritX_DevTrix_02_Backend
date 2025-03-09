@@ -122,51 +122,33 @@ export const handleRagPlayerUpdate = async (req: Request, res: Response): Promis
  */
 export const getPlayers = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { 
-      limit = '20', 
-      offset = '0', 
-      category, 
-      sortBy = 'name', 
-      sortOrder = 'asc' 
-    } = req.query;
+    const { limit = '20', offset = '0' } = req.query;
     
-    let query: FirebaseFirestore.Query = firestore.collection('players');
-    
-    // Apply category filter if specified
-    if (category) {
-      query = query.where('category', '==', category);
-    }
-    
-    // Apply sorting
-    query = query.orderBy(sortBy as string, sortOrder as 'asc' | 'desc');
+    // Simple query without filters that require composite indexes
+    const query = firestore.collection('players');
     
     // Apply pagination
     const limitNum = parseInt(limit as string);
     const offsetNum = parseInt(offset as string);
     
-    // Get total count first (without pagination)
-    const totalCountSnapshot = await query.count().get();
-    const totalCount = totalCountSnapshot.data().count;
-    
-    // Apply pagination to query
-    query = query.limit(limitNum).offset(offsetNum);
-    
-    // Execute query
+    // Get all documents and handle filtering in memory
     const snapshot = await query.get();
     
-    const players = snapshot.docs.map((doc) => ({
+    // Convert to array for in-memory operations
+    let players = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data()
     }));
     
+    // Apply pagination in memory
+    players = players.slice(offsetNum, offsetNum + limitNum);
+    
     return res.status(200).json({
       success: true,
-      totalCount,
       players,
       pagination: {
         limit: limitNum,
-        offset: offsetNum,
-        hasMore: offsetNum + players.length < totalCount
+        offset: offsetNum
       }
     });
     
@@ -179,7 +161,6 @@ export const getPlayers = async (req: Request, res: Response): Promise<any> => {
     });
   }
 };
-
 export const createPlayers = async (req: Request, res: Response): Promise<any> => {
   try {
     const { players } = req.body;
