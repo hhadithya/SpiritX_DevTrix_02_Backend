@@ -3,6 +3,7 @@ import { firestore } from './firebase/firebase';
 import bodyParser from 'body-parser';
 
 import  adminRouter from './routes/adminRouter';
+import teamRouter from './routes/teamsRouter';
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 app.use('/admin', adminRouter);
+app.use('/team', teamRouter);
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
